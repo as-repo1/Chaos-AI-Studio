@@ -1,0 +1,19 @@
+# Virtual Environments
+venv/
+env/
+__pycache__/
+
+# Mac
+.DS_Store
+
+# Ignore massive models if accidentally placed here
+*.safetensors
+*.bin
+*.ckpt
+*.gguf
+*.pt
+*.pth
+
+# App-specific logs and sqlite
+app.log
+*.db
