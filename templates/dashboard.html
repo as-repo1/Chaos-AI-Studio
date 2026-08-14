@@ -55,6 +55,46 @@
         <button class="btn primary" style="flex:1;" onclick="saveSettings()">Save</button>
     </div>
 </dialog>
+
+<dialog id="repo-details-modal" class="repo-modal" open>
+    <div class="repo-modal-header">
+        <h2>Edit repository details</h2>
+        <button class="repo-close-btn" type="button" aria-label="Close" onclick="document.getElementById('repo-details-modal').close(); this.closest('dialog').style.display='none';">×</button>
+    </div>
+
+    <div class="repo-form">
+        <div class="repo-field">
+            <label>Description</label>
+            <textarea class="repo-input repo-description" rows="1" aria-label="Description">Short description of this repository</textarea>
+            <div class="repo-remaining">350 characters remaining</div>
+        </div>
+
+        <div class="repo-field">
+            <label>Website</label>
+            <div class="repo-url-wrap">
+                <input class="repo-input" type="url" placeholder="Enter a valid URL" aria-label="Website">
+                <button class="repo-link-btn" type="button" aria-label="Open website">↗</button>
+            </div>
+        </div>
+
+        <div class="repo-field">
+            <label>Topics</label>
+            <div class="repo-input repo-topics-input">Add topics</div>
+        </div>
+
+        <div class="repo-field repo-homepage-field">
+            <label>Include in the home page</label>
+            <label class="checkbox-row"><input type="checkbox" checked> <span>Releases</span></label>
+            <label class="checkbox-row"><input type="checkbox"> <span>Deployments</span></label>
+            <label class="checkbox-row"><input type="checkbox" checked> <span>Packages</span></label>
+        </div>
+    </div>
+
+    <div class="repo-actions">
+        <button class="repo-action secondary" type="button">Cancel</button>
+        <button class="repo-action primary" type="button">Save changes</button>
+    </div>
+</dialog>
 {% endblock %}
 
 {% block scripts %}
@@ -255,42 +295,44 @@
         const body  = document.getElementById('settings-body');
         const conf  = appConfig[serviceId] || {};
 
-        // Build device options
-        const deviceOpts = vulkanDevices.length
-            ? vulkanDevices.map((d,i) => `<option value="${d.index}" ${(conf.vulkan_device||0)==d.index?'selected':''}>${d.name}</option>`).join('')
-            : `<option value="0">Device 0 (default)</option>`;
-
         if (serviceId === 'llama') {
             const modelOpts = textModels.map(m => `<option value="${m}" ${conf.model===m?'selected':''}>${m}</option>`).join('');
+            // Build compute backend options
+            const backend   = conf.compute_backend || 'vulkan:0';
+            const backendOpts = vulkanDevices.map(d => {
+                const val = d.value || (d.index === -1 ? 'cpu' : `vulkan:${d.index}`);
+                return `<option value="${val}" ${backend===val?'selected':''}>${d.name}</option>`;
+            }).join('');
             body.innerHTML = `
                 <label>Model</label>
                 <select name="model" class="model-select" style="margin-bottom:0.5rem;">${modelOpts}</select>
+                <label>Compute Backend</label>
+                <select name="compute_backend" class="model-select" style="margin-bottom:0.5rem;">${backendOpts}</select>
                 <label>Context Size (tokens)</label>
                 <input type="number" name="ctx_size" value="${conf.ctx_size||4096}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>GPU Layers (-ngl)</label>
-                <input type="number" name="ngl" value="${conf.ngl||99}" class="model-select" style="margin-bottom:0.5rem;">
                 <label>Threads</label>
                 <input type="number" name="threads" value="${conf.threads||4}" class="model-select" style="margin-bottom:0.5rem;">
                 <label>Port</label>
-                <input type="number" name="port" value="${conf.port||8080}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>Vulkan Device</label>
-                <select name="vulkan_device" class="model-select">${deviceOpts}</select>
+                <input type="number" name="port" value="${conf.port||8080}" class="model-select">
             `;
         } else if (serviceId === 'text2speach') {
             const modelOpts = audioModels.map(m => `<option value="${m}" ${conf.model===m?'selected':''}>${m}</option>`).join('');
+            const backend   = conf.compute_backend || 'vulkan:0';
+            const backendOpts = vulkanDevices.map(d => {
+                const val = d.value || (d.index === -1 ? 'cpu' : `vulkan:${d.index}`);
+                return `<option value="${val}" ${backend===val?'selected':''}>${d.name}</option>`;
+            }).join('');
             body.innerHTML = `
                 <label>Model</label>
                 <select name="model" class="model-select" style="margin-bottom:0.5rem;">${modelOpts}</select>
+                <label>Compute Backend</label>
+                <select name="compute_backend" class="model-select" style="margin-bottom:0.5rem;">${backendOpts}</select>
                 <label>Context Size (tokens)</label>
                 <input type="number" name="ctx_size" value="${conf.ctx_size||1024}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>GPU Layers (-ngl)</label>
-                <input type="number" name="ngl" value="${conf.ngl||99}" class="model-select" style="margin-bottom:0.5rem;">
                 <label>Threads</label>
                 <input type="number" name="threads" value="${conf.threads||4}" class="model-select" style="margin-bottom:0.5rem;">
                 <label>Port</label>
-                <input type="number" name="port" value="${conf.port||8090}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>Vulkan Device</label>
-                <select name="vulkan_device" class="model-select">${deviceOpts}</select>
+                <input type="number" name="port" value="${conf.port||8090}" class="model-select">
             `;
         } else if (serviceId === 'comfyui') {
             body.innerHTML = `

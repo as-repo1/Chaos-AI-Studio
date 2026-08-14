@@ -23,6 +23,7 @@ CTX_SIZE="${CTX_SIZE:-1024}"
 NGL="${NGL:-99}"
 PORT="${TTS_PORT:-8090}"
 THREADS="${THREADS:-4}"
+VULKAN_DEVICE="${VULKAN_DEVICE:-0}"
 
 # Run the API server with Intel Arc 4GB VRAM optimizations
 /home/chaos/Chaos-AI-Studio/llama.cpp-src/build/bin/llama-server \
@@ -31,4 +32,6 @@ THREADS="${THREADS:-4}"
     --host "0.0.0.0" \
     -ngl "$NGL" \
     -c "$CTX_SIZE" \
+    -mg "$VULKAN_DEVICE" \
+    -sm none \
     -t "$THREADS"

@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+.tts-layout { display: flex; flex-direction: column; gap: 1.5rem; max-width: 760px; margin: 0 auto; }
+.tts-card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; padding: 2rem; backdrop-filter: blur(20px);
+}
+.tts-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-main); }
+.tts-textarea {
+    width: 100%; min-height: 160px; background: var(--bg-dark);
+    border: 1px solid var(--card-border); color: var(--text-main);
+    border-radius: 12px; padding: 1rem; font-family: 'Inter', sans-serif;
+    font-size: 0.95rem; line-height: 1.6; resize: vertical; transition: border-color 0.2s;
+}
+.tts-textarea:focus { outline: none; border-color: var(--primary); }
+.char-count { font-size: 0.78rem; color: var(--text-muted); text-align: right; margin-top: 0.35rem; }
+.tts-controls { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+.speak-btn {
+    padding: 0.8rem 2rem; border-radius: 50px; font-size: 0.95rem; font-weight: 600;
+    background: var(--primary); color: var(--bg-dark); border: none; cursor: pointer;
+    transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;
+}
+.speak-btn:hover:not(:disabled) { transform: scale(1.03); box-shadow: 0 0 20px rgba(163,230,53,0.3); }
+.speak-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.tts-status { font-size: 0.85rem; color: var(--text-muted); }
+
+/* Waveform */
+.waveform-container {
+    position: relative; height: 80px; background: var(--bg-dark);
+    border-radius: 12px; overflow: hidden; border: 1px solid var(--card-border);
+}
+#waveform-canvas { width: 100%; height: 100%; }
+.audio-controls { display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; }
+.play-pause-btn {
+    width: 42px; height: 42px; border-radius: 50%; background: var(--primary);
+    border: none; cursor: pointer; color: var(--bg-dark);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: transform 0.2s;
+}
+.play-pause-btn:hover { transform: scale(1.1); }
+.time-display { font-size: 0.82rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; min-width: 80px; }
+.seek-bar { flex: 1; height: 4px; -webkit-appearance: none; appearance: none; background: var(--card-border); border-radius: 2px; cursor: pointer; }
+.seek-bar::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); cursor: pointer; }
+.download-btn {
+    padding: 0.5rem 1.2rem; border-radius: 50px; font-size: 0.82rem;
+    background: transparent; border: 1px solid var(--card-border);
+    color: var(--text-muted); cursor: pointer; transition: all 0.2s;
+}
+.download-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
+
+/* Offline notice */
+.tts-offline {
+    background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 10px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--danger);
+    display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    </div>
+    <div>
+        <h1>Text to Speech</h1>
+        <p>Convert text to natural-sounding audio using VibeVoice — fully local.</p>
+    </div>
+</header>
+
+<div class="tts-layout">
+    <!-- Offline notice -->
+    <div id="tts-offline-notice" class="tts-offline" style="display:none;">
+        ⚠ TTS service is not running.
+        <a href="/" style="color:inherit;font-weight:600;margin-left:0.4rem;">→ Start it from the dashboard</a>
+    </div>
+
+    <!-- Input card -->
+    <div class="tts-card">
+        <h3>Input Text</h3>
+        <textarea class="tts-textarea" id="tts-text"
+            placeholder="Type or paste the text you want to convert to speech…"
+            oninput="updateCharCount()"></textarea>
+        <div class="char-count" id="char-count">0 / 2000 characters</div>
+        <div class="tts-controls">
+            <button class="speak-btn" id="speak-btn" onclick="synthesize()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                Speak
+            </button>
+            <span class="tts-status" id="tts-status"></span>
+        </div>
+    </div>
+
+    <!-- Audio output card -->
+    <div class="tts-card" id="audio-card" style="display:none;">
+        <h3>Generated Audio</h3>
+        <div class="waveform-container">
+            <canvas id="waveform-canvas"></canvas>
+        </div>
+        <div class="audio-controls">
+            <button class="play-pause-btn" id="play-pause-btn" onclick="togglePlayback()">
+                <svg id="play-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <svg id="pause-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+            <input type="range" class="seek-bar" id="seek-bar" value="0" min="0" max="100" step="0.1"
+                   oninput="seek(this.value)">
+            <span class="time-display" id="time-display">0:00 / 0:00</span>
+            <button class="download-btn" onclick="downloadAudio()">⬇ Download</button>
+        </div>
+    </div>
+
+    <!-- Presets -->
+    <div class="tts-card">
+        <h3>Quick Presets</h3>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button class="btn secondary" onclick="setPreset('Hello! I am VibeVoice, your local text-to-speech assistant. How can I help you today?')">Greeting</button>
+            <button class="btn secondary" onclick="setPreset('The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet.')">Pangram</button>
+            <button class="btn secondary" onclick="setPreset('In the beginning, there was silence. Then, from the depths of computation, came the voice of the machine.')">Dramatic</button>
+        </div>
+    </div>
+</div>
+
+<audio id="audio-player" style="display:none;"></audio>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let audioBlob    = null;
+let audioURL     = null;
+const audioEl    = document.getElementById('audio-player');
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+    try {
+        const s = await (await fetch('/api/status')).json();
+        document.getElementById('tts-offline-notice').style.display =
+            s.text2speach?.running ? 'none' : 'flex';
+    } catch(e) {}
+}
+
+// ── Synthesis ─────────────────────────────────────────────────────────────────
+async function synthesize() {
+    const text = document.getElementById('tts-text').value.trim();
+    if (!text) { showToast('Please enter some text first.', true); return; }
+
+    const btn    = document.getElementById('speak-btn');
+    const status = document.getElementById('tts-status');
+    btn.disabled = true;
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg> Generating…`;
+    status.innerText = 'Sending to TTS server…';
+
+    try {
+        const res = await fetch('/api/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || `HTTP ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        audioBlob  = blob;
+        audioURL   = URL.createObjectURL(blob);
+        audioEl.src = audioURL;
+
+        document.getElementById('audio-card').style.display = 'block';
+        status.innerText = '✓ Audio ready';
+        await audioEl.play();
+        drawWaveform(blob);
+        showToast('Speech generated!');
+    } catch(e) {
+        status.innerText = `Error: ${e.message}`;
+        showToast(`TTS error: ${e.message}`, true);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg> Speak`;
+    }
+}
+
+// ── Audio controls ────────────────────────────────────────────────────────────
+function togglePlayback() {
+    if (audioEl.paused) audioEl.play(); else audioEl.pause();
+    document.getElementById('play-icon').style.display  = audioEl.paused ? 'block' : 'none';
+    document.getElementById('pause-icon').style.display = audioEl.paused ? 'none'  : 'block';
+}
+function seek(val) { audioEl.currentTime = (val / 100) * audioEl.duration; }
+function downloadAudio() {
+    if (!audioBlob) return;
+    const a = document.createElement('a');
+    a.href = audioURL; a.download = 'tts-output.wav'; a.click();
+}
+function fmt(s) { const m = Math.floor(s/60); return `${m}:${String(Math.floor(s%60)).padStart(2,'0')}`; }
+
+audioEl.addEventListener('timeupdate', () => {
+    const pct = audioEl.duration ? (audioEl.currentTime / audioEl.duration * 100) : 0;
+    document.getElementById('seek-bar').value = pct;
+    document.getElementById('time-display').innerText = `${fmt(audioEl.currentTime)} / ${fmt(audioEl.duration||0)}`;
+});
+audioEl.addEventListener('ended', () => {
+    document.getElementById('play-icon').style.display  = 'block';
+    document.getElementById('pause-icon').style.display = 'none';
+});
+
+// ── Waveform visualizer ───────────────────────────────────────────────────────
+async function drawWaveform(blob) {
+    const canvas  = document.getElementById('waveform-canvas');
+    const ctx     = canvas.getContext('2d');
+    canvas.width  = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+
+    try {
+        const arrayBuf = await blob.arrayBuffer();
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const decoded  = await audioCtx.decodeAudioData(arrayBuf);
+        const data     = decoded.getChannelData(0);
+        const step     = Math.ceil(data.length / canvas.width);
+        const primary  = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#a3e635';
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = primary;
+        ctx.lineWidth   = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i < canvas.width; i++) {
+            let min = 1, max = -1;
+            for (let j = 0; j < step; j++) {
+                const v = data[i * step + j];
+                if (v < min) min = v;
+                if (v > max) max = v;
+            }
+            const y1 = ((1 - max) / 2) * canvas.height;
+            const y2 = ((1 - min) / 2) * canvas.height;
+            ctx.moveTo(i, y1); ctx.lineTo(i, y2);
+        }
+        ctx.stroke();
+    } catch(e) {
+        // Waveform failed (e.g. non-PCM), just leave it blank
+    }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function updateCharCount() {
+    const len = document.getElementById('tts-text').value.length;
+    const el  = document.getElementById('char-count');
+    el.innerText = `${len} / 2000 characters`;
+    el.style.color = len > 1800 ? 'var(--danger)' : 'var(--text-muted)';
+}
+function setPreset(text) { document.getElementById('tts-text').value = text; updateCharCount(); }
+
+init();
+</script>
+{% endblock %}

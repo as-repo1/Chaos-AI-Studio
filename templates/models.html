@@ -57,12 +57,23 @@
                 
                 let btnHtml = '';
                 if (m.is_downloaded) {
-                    btnHtml = `<button class="btn secondary" disabled>Downloaded</button>`;
+                    btnHtml = `<button class="btn secondary" disabled style="font-size:0.8rem;">✓ Downloaded</button>`;
                 } else if (m.is_downloading) {
-                    btnHtml = `<button class="btn secondary" disabled>Downloading...</button>`;
+                    const pct = m.dl_percent || 0;
+                    btnHtml = `
+                        <div style="width:140px;">
+                            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">
+                                <span>Downloading…</span><span>${pct}%</span>
+                            </div>
+                            <div class="progress-bar" style="height:6px;">
+                                <div class="progress-fill" style="width:${pct}%;transition:width 0.5s;"></div>
+                            </div>
+                        </div>`;
                 } else {
-                    btnHtml = `<button class="btn primary" onclick="downloadModel('${m.id}')" style="width: auto; padding: 0.5rem 1rem;">Download</button>`;
+                    const sizeStr = m.size_gb ? `${m.size_gb} GB` : '';
+                    btnHtml = `<button class="btn primary" onclick="downloadModel('${m.id}')" style="width:auto;padding:0.5rem 1rem;font-size:0.82rem;">Download${sizeStr ? ' · '+sizeStr : ''}</button>`;
                 }
+
 
                 card.innerHTML = `
                     <div class="details">

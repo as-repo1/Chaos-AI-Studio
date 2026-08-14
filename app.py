@@ -173,17 +173,26 @@ def get_gpu_info():
     return info
 
 def get_vulkan_devices():
-    """Parse vulkaninfo --summary to list GPU devices."""
-    devices = []
+    """Parse vulkaninfo --summary and return backends including CPU."""
+    devices = [{"index": -1, "name": "CPU Only", "type": "cpu", "value": "cpu"}]
     try:
-        out = subprocess.check_output(["vulkaninfo", "--summary"], stderr=subprocess.DEVNULL, timeout=5).decode()
-        idx = 0
+        out  = subprocess.check_output(["vulkaninfo", "--summary"],
+                                       stderr=subprocess.DEVNULL, timeout=5).decode()
+        idx  = 0
+        name = None
+        dtype = ""
         for line in out.splitlines():
             line = line.strip()
-            if line.startswith("deviceName"):
+            if line.startswith("deviceType"):
+                dtype = line.split("=")[-1].strip()
+            elif line.startswith("deviceName"):
                 name = line.split("=")[-1].strip()
-                devices.append({"index": idx, "name": name})
-                idx += 1
+                label = name
+                if "DISCRETE" in dtype.upper():  label += " (Dedicated)"
+                elif "INTEGRATED" in dtype.upper(): label += " (Integrated)"
+                devices.append({"index": idx, "name": label, "type": dtype, "value": f"vulkan:{idx}"})
+                idx  += 1
+                name  = None
     except Exception:
         pass
     return devices
@@ -200,6 +209,10 @@ def models_page():
 @app.route("/chat")
 def chat_page():
     return render_template("chat.html")
+
+@app.route("/image")
+def image_page():
+    return render_template("image.html")
 
 @app.route("/tts")
 def tts_page():
@@ -238,6 +251,13 @@ def get_audio_models():
 @app.route("/api/gpu/devices")
 def gpu_devices():
     return jsonify(get_vulkan_devices())
+
+@app.route("/api/models/image")
+def get_image_models():
+    d = os.path.join(MODELS_DIR, "image-models")
+    if not os.path.exists(d):
+        return jsonify([])
+    return jsonify(sorted(f for f in os.listdir(d) if f.endswith(".safetensors")))
 
 @app.route("/api/catalogue")
 def catalogue():
@@ -326,30 +346,41 @@ def start_service(service):
     script_path = os.path.join(SCRIPTS_DIR, script_map[service])
 
     if service == "llama":
-        cfg = config.get("llama", {})
-        # Auto-pick first model if none configured
+        cfg   = config.get("llama", {})
         model = cfg.get("model", "")
         if not model:
             available = list_gguf("llm-models")
             model = available[0] if available else ""
         if not model:
             return jsonify({"error": "No LLM model found in ~/models/llm-models/"}), 400
-        script_env["MODEL_PATH"]    = os.path.join(MODELS_DIR, "llm-models", model)
-        script_env["CTX_SIZE"]      = str(cfg.get("ctx_size", 4096))
-        script_env["NGL"]           = str(cfg.get("ngl", 99))
-        script_env["LLAMA_PORT"]    = str(cfg.get("port", 8080))
-        script_env["THREADS"]       = str(cfg.get("threads", 4))
-        script_env["VULKAN_DEVICE"] = str(cfg.get("vulkan_device", 0))
+        script_env["MODEL_PATH"] = os.path.join(MODELS_DIR, "llm-models", model)
+        script_env["CTX_SIZE"]   = str(cfg.get("ctx_size", 4096))
+        script_env["LLAMA_PORT"] = str(cfg.get("port", 8080))
+        script_env["THREADS"]    = str(cfg.get("threads", 4))
+        # Compute backend: cpu | vulkan:0 | vulkan:1
+        backend = cfg.get("compute_backend", "vulkan:0")
+        if backend == "cpu":
+            script_env["NGL"] = "0"
+            script_env["VULKAN_DEVICE"] = "0"
+        else:
+            script_env["NGL"] = str(cfg.get("ngl", 99))
+            script_env["VULKAN_DEVICE"] = str(backend.split(":")[-1] if ":" in backend else cfg.get("vulkan_device", 0))
 
     elif service == "text2speach":
         cfg   = config.get("text2speach", {})
         model = cfg.get("model", "vibevoice-1.5b-q4_k_m.gguf")
         script_env["MODEL_PATH"]    = os.path.join(MODELS_DIR, "audio-models", model)
         script_env["CTX_SIZE"]      = str(cfg.get("ctx_size", 1024))
-        script_env["NGL"]           = str(cfg.get("ngl", 99))
-        script_env["TTS_PORT"]      = str(cfg.get("port", 8090))
-        script_env["THREADS"]       = str(cfg.get("threads", 4))
-        script_env["VULKAN_DEVICE"] = str(cfg.get("vulkan_device", 0))
+        # Compute backend
+        backend = cfg.get("compute_backend", "vulkan:0")
+        if backend == "cpu":
+            script_env["NGL"] = "0"
+            script_env["VULKAN_DEVICE"] = "0"
+        else:
+            script_env["NGL"] = str(cfg.get("ngl", 99))
+            script_env["VULKAN_DEVICE"] = str(backend.split(":")[-1] if ":" in backend else cfg.get("vulkan_device", 0))
+        script_env["TTS_PORT"]  = str(cfg.get("port", 8090))
+        script_env["THREADS"]   = str(cfg.get("threads", 4))
 
     elif service == "comfyui":
         try: os.remove('/tmp/wan_video_active')
@@ -465,6 +496,147 @@ def tts_speak():
         with urllib.request.urlopen(req, timeout=60) as resp:
             audio_data = resp.read()
         return Response(audio_data, content_type="audio/wav")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 503
+
+
+# ── ComfyUI image generation proxy ────────────────────────────────────────────
+COMFY_PORT = 8188
+
+def _comfy_post(path, payload):
+    body = json.dumps(payload).encode()
+    req  = urllib.request.Request(
+        f"http://localhost:{COMFY_PORT}{path}", data=body,
+        headers={"Content-Type": "application/json"}, method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read())
+
+def _comfy_get(path):
+    with urllib.request.urlopen(f"http://localhost:{COMFY_PORT}{path}", timeout=10) as r:
+        return json.loads(r.read())
+
+@app.route("/api/image/generate", methods=["POST"])
+def image_generate():
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+    d = request.get_json()
+
+    prompt_text    = d.get("prompt", "a beautiful landscape")
+    negative_text  = d.get("negative", "blurry, ugly, nsfw")
+    model_filename = d.get("model", "")
+    steps          = int(d.get("steps", 20))
+    cfg_scale      = float(d.get("cfg", 7.0))
+    width          = int(d.get("width", 512))
+    height         = int(d.get("height", 512))
+    seed           = int(d.get("seed", -1))
+    import random
+    if seed == -1:
+        seed = random.randint(0, 2**32 - 1)
+
+    # If no model picked, use first available
+    if not model_filename:
+        avail = sorted(f for f in os.listdir(os.path.join(MODELS_DIR, "image-models"))
+                       if f.endswith(".safetensors"))
+        if not avail:
+            return jsonify({"error": "No image models found in ~/models/image-models/"}), 400
+        model_filename = avail[0]
+
+    # Standard KSampler txt2img workflow
+    workflow = {
+        "4": {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {"ckpt_name": model_filename}
+        },
+        "5": {
+            "class_type": "EmptyLatentImage",
+            "inputs": {"width": width, "height": height, "batch_size": 1}
+        },
+        "6": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": prompt_text, "clip": ["4", 1]}
+        },
+        "7": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": negative_text, "clip": ["4", 1]}
+        },
+        "3": {
+            "class_type": "KSampler",
+            "inputs": {
+                "seed": seed, "steps": steps, "cfg": cfg_scale,
+                "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0,
+                "model": ["4", 0], "positive": ["6", 0],
+                "negative": ["7", 0], "latent_image": ["5", 0]
+            }
+        },
+        "8": {
+            "class_type": "VAEDecode",
+            "inputs": {"samples": ["3", 0], "vae": ["4", 2]}
+        },
+        "9": {
+            "class_type": "SaveImage",
+            "inputs": {"filename_prefix": "chaos-ai", "images": ["8", 0]}
+        }
+    }
+
+    try:
+        result = _comfy_post("/prompt", {"prompt": workflow})
+        return jsonify({"prompt_id": result["prompt_id"], "seed": seed})
+    except Exception as e:
+        return jsonify({"error": f"ComfyUI error: {e}"}), 503
+
+@app.route("/api/image/status/<prompt_id>")
+def image_status(prompt_id):
+    """Poll ComfyUI queue + history for progress."""
+    try:
+        # Check if still in queue
+        queue = _comfy_get("/queue")
+        running = queue.get("queue_running", [])
+        pending = queue.get("queue_pending", [])
+
+        for item in running:
+            if len(item) > 1 and item[1] == prompt_id:
+                # Get step progress from /progress if available
+                try:
+                    prog = _comfy_get("/progress")
+                    step     = prog.get("value", 0)
+                    max_step = prog.get("max", 1)
+                    pct = round(step / max_step * 100) if max_step else 0
+                    return jsonify({"status": "running", "step": step, "max": max_step, "percent": pct})
+                except Exception:
+                    return jsonify({"status": "running", "percent": 50})
+
+        for item in pending:
+            if len(item) > 1 and item[1] == prompt_id:
+                return jsonify({"status": "queued", "percent": 0})
+
+        # Not in queue — check history
+        history = _comfy_get(f"/history/{prompt_id}")
+        if prompt_id in history:
+            outputs  = history[prompt_id].get("outputs", {})
+            images   = []
+            for node_id, node_out in outputs.items():
+                for img in node_out.get("images", []):
+                    images.append(img["filename"])
+            if images:
+                return jsonify({"status": "done", "percent": 100, "images": images})
+
+        return jsonify({"status": "unknown", "percent": 0})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+@app.route("/api/image/view/<filename>")
+def image_view(filename):
+    """Proxy image bytes from ComfyUI /view endpoint."""
+    import urllib.parse
+    safe = urllib.parse.quote(filename)
+    try:
+        with urllib.request.urlopen(
+            f"http://localhost:{COMFY_PORT}/view?filename={safe}&type=output",
+            timeout=10
+        ) as r:
+            data = r.read()
+        return Response(data, content_type="image/png")
     except Exception as e:
         return jsonify({"error": str(e)}), 503
 

@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+/* ── Chat Layout ─────────────────────────────────────────────────────────── */
+.chat-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 1.5rem;
+    height: calc(100vh - 120px);
+    max-height: 860px;
+}
+.chat-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 1.25rem;
+    backdrop-filter: blur(20px);
+    overflow: hidden;
+}
+.chat-sidebar h3 { font-size: 0.85rem; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.25rem; }
+.session-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem; }
+.session-item {
+    padding: 0.6rem 0.9rem; border-radius: 10px; cursor: pointer; font-size: 0.85rem;
+    color: var(--text-muted); border: 1px solid transparent; transition: all 0.2s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.session-item:hover { background: rgba(255,255,255,0.05); color: var(--text-main); }
+.session-item.active { background: rgba(163,230,53,0.08); color: var(--primary); border-color: rgba(163,230,53,0.2); }
+.new-chat-btn {
+    width: 100%; padding: 0.65rem; border-radius: 10px; font-size: 0.85rem; font-weight: 500;
+    background: rgba(163,230,53,0.08); color: var(--primary);
+    border: 1px solid rgba(163,230,53,0.2); cursor: pointer; transition: all 0.2s;
+}
+.new-chat-btn:hover { background: rgba(163,230,53,0.16); }
+
+/* ── Main chat panel ─────────────────────────────────────────────────────── */
+.chat-main {
+    display: flex; flex-direction: column; gap: 0;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 20px; overflow: hidden; backdrop-filter: blur(20px);
+}
+.chat-toolbar {
+    display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--card-border);
+}
+.chat-toolbar label { font-size: 0.78rem; color: var(--text-muted); margin-right: 0.25rem; }
+.chat-toolbar select, .chat-toolbar input[type=number] {
+    background: var(--bg-dark); border: 1px solid var(--card-border); color: var(--text-main);
+    padding: 0.35rem 0.65rem; border-radius: 8px; font-size: 0.82rem; font-family: inherit;
+}
+.sys-prompt-toggle { font-size: 0.8rem; color: var(--text-muted); cursor: pointer; text-decoration: underline; margin-left: auto; }
+.sys-prompt-area {
+    border-top: 1px solid var(--card-border); padding: 0.75rem 1.25rem;
+    display: none;
+}
+.sys-prompt-area textarea {
+    width: 100%; background: var(--bg-dark); border: 1px solid var(--card-border);
+    color: var(--text-main); border-radius: 8px; padding: 0.6rem; font-family: 'Inter', sans-serif;
+    font-size: 0.83rem; resize: vertical; min-height: 64px;
+}
+.chat-messages {
+    flex: 1; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;
+}
+.msg { display: flex; flex-direction: column; gap: 0.3rem; max-width: 82%; animation: fadeIn 0.2s ease; }
+.msg.user  { align-self: flex-end; align-items: flex-end; }
+.msg.assistant { align-self: flex-start; align-items: flex-start; }
+.msg-bubble {
+    padding: 0.75rem 1rem; border-radius: 16px; font-size: 0.9rem; line-height: 1.6;
+    word-break: break-word; position: relative;
+}
+.msg.user .msg-bubble      { background: rgba(163,230,53,0.12); border: 1px solid rgba(163,230,53,0.2); border-bottom-right-radius: 4px; }
+.msg.assistant .msg-bubble { background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-bottom-left-radius: 4px; }
+.msg-bubble pre { background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; overflow-x: auto; margin: 0.5rem 0; }
+.msg-bubble code { font-family: 'JetBrains Mono', monospace; font-size: 0.83rem; }
+.msg-bubble p { margin: 0 0 0.5rem 0; }
+.msg-bubble p:last-child { margin-bottom: 0; }
+.msg-meta { font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; }
+.copy-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; font-size: 0.72rem; }
+.copy-btn:hover { color: var(--primary); }
+.thinking { display: flex; gap: 4px; align-items: center; padding: 0.75rem 1rem; }
+.thinking span { width: 8px; height: 8px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.2s infinite; }
+.thinking span:nth-child(2) { animation-delay: 0.2s; }
+.thinking span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,80%,100%{transform:scale(0.8);opacity:0.4} 40%{transform:scale(1.1);opacity:1} }
+@keyframes fadeIn  { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+/* ── Token count bar ─────────────────────────────────────────────────────── */
+.token-bar { font-size: 0.75rem; color: var(--text-muted); padding: 0.3rem 1.25rem; border-top: 1px solid var(--card-border); }
+
+/* ── Input row ───────────────────────────────────────────────────────────── */
+.chat-input-row {
+    display: flex; gap: 0.75rem; padding: 0.9rem 1.25rem;
+    border-top: 1px solid var(--card-border); align-items: flex-end;
+}
+.chat-input {
+    flex: 1; background: var(--bg-dark); border: 1px solid var(--card-border);
+    color: var(--text-main); border-radius: 12px; padding: 0.7rem 1rem;
+    font-family: 'Inter', sans-serif; font-size: 0.9rem; resize: none;
+    min-height: 44px; max-height: 160px; overflow-y: auto; transition: border-color 0.2s;
+}
+.chat-input:focus { outline: none; border-color: var(--primary); }
+.send-btn {
+    width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+    background: var(--primary); border: none; cursor: pointer; color: var(--bg-dark);
+    display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.send-btn:hover:not(:disabled) { transform: scale(1.05); }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ── Offline notice ──────────────────────────────────────────────────────── */
+.offline-notice {
+    background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 10px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--danger);
+    display: flex; align-items: center; gap: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </div>
+    <div>
+        <h1>Chat</h1>
+        <p>Talk to your local LLM — fully private, fully offline.</p>
+    </div>
+</header>
+
+<div id="llm-offline-notice" class="offline-notice" style="display:none;margin-bottom:1rem;">
+    ⚠ Text AI (Llama) is not running. <a href="/" style="color:inherit;font-weight:600;margin-left:0.4rem;">→ Start it from the dashboard</a>
+</div>
+
+<div class="chat-layout">
+    <!-- Sidebar: conversation sessions -->
+    <div class="chat-sidebar">
+        <h3>Conversations</h3>
+        <button class="new-chat-btn" onclick="newSession()">+ New Chat</button>
+        <div class="session-list" id="session-list"></div>
+        <button class="new-chat-btn" style="background:rgba(239,68,68,0.08);color:var(--danger);border-color:rgba(239,68,68,0.2);margin-top:auto;" onclick="clearAllSessions()">Clear All</button>
+    </div>
+
+    <!-- Main chat area -->
+    <div class="chat-main">
+        <!-- Toolbar -->
+        <div class="chat-toolbar">
+            <label>Model</label>
+            <select id="model-select">
+                <option value="">Loading…</option>
+            </select>
+            <label>Temp</label>
+            <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1" style="width:64px;">
+            <label>Max tokens</label>
+            <input type="number" id="max-tokens" value="2048" min="64" max="8192" step="64" style="width:80px;">
+            <span class="sys-prompt-toggle" onclick="toggleSysPrompt()">System Prompt ▾</span>
+        </div>
+        <div class="sys-prompt-area" id="sys-prompt-area">
+            <textarea id="system-prompt" placeholder="You are a helpful AI assistant…"></textarea>
+        </div>
+
+        <!-- Messages -->
+        <div class="chat-messages" id="chat-messages">
+            <div style="text-align:center;color:var(--text-muted);margin:auto;font-size:0.9rem;">
+                Start a conversation…
+            </div>
+        </div>
+
+        <!-- Token bar -->
+        <div class="token-bar" id="token-bar">~0 tokens used</div>
+
+        <!-- Input -->
+        <div class="chat-input-row">
+            <textarea class="chat-input" id="chat-input" placeholder="Type a message… (Shift+Enter for new line)" rows="1"
+                onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+            <button class="send-btn" id="send-btn" onclick="sendMessage()" title="Send">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Session store (localStorage) ──────────────────────────────────────────────
+function loadSessions() { return JSON.parse(localStorage.getItem('chat-sessions') || '{}'); }
+function saveSessions(s) { localStorage.setItem('chat-sessions', JSON.stringify(s)); }
+
+let sessions   = loadSessions();
+let currentId  = null;
+let isStreaming = false;
+let totalTokens = 0;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+    await loadModels();
+    await checkLLMStatus();
+    renderSessionList();
+    // Load most recent session or create new
+    const keys = Object.keys(sessions);
+    if (keys.length) loadSession(keys[keys.length - 1]);
+    else newSession();
+}
+
+async function loadModels() {
+    const sel = document.getElementById('model-select');
+    try {
+        const models = await (await fetch('/api/models/text')).json();
+        const cfg    = await (await fetch('/api/config')).json();
+        const current = cfg.llama?.model || '';
+        sel.innerHTML = models.length
+            ? models.map(m => `<option value="${m}" ${m===current?'selected':''}>${m.replace(/\.gguf$/i,'')}</option>`).join('')
+            : '<option value="">No models found</option>';
+    } catch(e) { sel.innerHTML = '<option value="">Error loading models</option>'; }
+}
+
+async function checkLLMStatus() {
+    try {
+        const s = await (await fetch('/api/status')).json();
+        document.getElementById('llm-offline-notice').style.display =
+            s.llama?.running ? 'none' : 'flex';
+    } catch(e) {}
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+function newSession() {
+    const id  = Date.now().toString();
+    sessions[id] = { title: 'New Chat', messages: [] };
+    saveSessions(sessions);
+    loadSession(id);
+    renderSessionList();
+}
+
+function loadSession(id) {
+    currentId   = id;
+    totalTokens = 0;
+    const sess  = sessions[id];
+    const el    = document.getElementById('chat-messages');
+    el.innerHTML = '';
+    if (!sess.messages.length) {
+        el.innerHTML = '<div style="text-align:center;color:var(--text-muted);margin:auto;font-size:0.9rem;">Start a conversation…</div>';
+    } else {
+        sess.messages.forEach(m => appendBubble(m.role, m.content, false));
+        el.scrollTop = el.scrollHeight;
+    }
+    updateTokenBar();
+    renderSessionList();
+}
+
+function renderSessionList() {
+    const list = document.getElementById('session-list');
+    const keys = Object.keys(sessions).reverse();
+    list.innerHTML = keys.map(id => `
+        <div class="session-item ${id===currentId?'active':''}" onclick="loadSession('${id}')"
+             title="${sessions[id].title}">
+            ${sessions[id].title}
+        </div>
+    `).join('') || '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.5rem;">No sessions yet</div>';
+}
+
+function clearAllSessions() {
+    if (!confirm('Clear all conversations?')) return;
+    sessions = {}; saveSessions(sessions); newSession();
+}
+
+// ── Messaging ─────────────────────────────────────────────────────────────────
+async function sendMessage() {
+    if (isStreaming) return;
+    const input = document.getElementById('chat-input');
+    const text  = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    autoResize(input);
+
+    // Clear placeholder
+    const msgEl = document.getElementById('chat-messages');
+    const placeholder = msgEl.querySelector('div[style*="text-align:center"]');
+    if (placeholder) placeholder.remove();
+
+    // Add to session
+    sessions[currentId].messages.push({ role:'user', content: text });
+    if (sessions[currentId].title === 'New Chat') sessions[currentId].title = text.slice(0, 36);
+    saveSessions(sessions);
+    renderSessionList();
+
+    appendBubble('user', text);
+    msgEl.scrollTop = msgEl.scrollHeight;
+
+    // Build payload
+    const sysPrompt = document.getElementById('system-prompt').value.trim();
+    const messages  = [];
+    if (sysPrompt) messages.push({ role:'system', content: sysPrompt });
+    sessions[currentId].messages.forEach(m => messages.push(m));
+
+    const payload = {
+        model:       document.getElementById('model-select').value || 'local-model',
+        messages,
+        temperature: parseFloat(document.getElementById('temperature').value) || 0.7,
+        max_tokens:  parseInt(document.getElementById('max-tokens').value) || 2048,
+        stream:      true,
+    };
+
+    // Show thinking indicator
+    const thinkingId = 'thinking-' + Date.now();
+    msgEl.innerHTML += `<div class="msg assistant" id="${thinkingId}"><div class="msg-bubble thinking"><span></span><span></span><span></span></div></div>`;
+    msgEl.scrollTop  = msgEl.scrollHeight;
+    isStreaming = true;
+    document.getElementById('send-btn').disabled = true;
+
+    let fullText = '';
+    try {
+        const resp = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+
+        const reader = resp.body.getReader();
+        const dec    = new TextDecoder();
+        // Replace thinking with real bubble
+        document.getElementById(thinkingId)?.remove();
+        const bubble = appendBubble('assistant', '', false);
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const lines = dec.decode(value).split('\n').filter(l => l.startsWith('data:'));
+            for (const line of lines) {
+                const raw = line.slice(5).trim();
+                if (raw === '[DONE]') break;
+                try {
+                    const chunk = JSON.parse(raw);
+                    const delta = chunk.choices?.[0]?.delta?.content || '';
+                    fullText += delta;
+                    bubble.querySelector('.msg-bubble').innerHTML = markdownToHTML(fullText);
+                    totalTokens += Math.ceil(delta.length / 4);
+                    updateTokenBar();
+                    msgEl.scrollTop = msgEl.scrollHeight;
+                } catch(e) {}
+            }
+        }
+    } catch(e) {
+        document.getElementById(thinkingId)?.remove();
+        appendBubble('assistant', `⚠ Error: ${e.message}`);
+    }
+
+    isStreaming = false;
+    document.getElementById('send-btn').disabled = false;
+
+    if (fullText) {
+        sessions[currentId].messages.push({ role:'assistant', content: fullText });
+        saveSessions(sessions);
+    }
+    msgEl.scrollTop = msgEl.scrollHeight;
+}
+
+function appendBubble(role, content, scroll=true) {
+    const el   = document.getElementById('chat-messages');
+    const msg  = document.createElement('div');
+    msg.className = `msg ${role}`;
+    const ts   = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    msg.innerHTML = `
+        <div class="msg-bubble">${content ? markdownToHTML(content) : ''}</div>
+        <div class="msg-meta">
+            ${ts}
+            <button class="copy-btn" onclick="copyMsg(this)" title="Copy">Copy</button>
+        </div>
+    `;
+    el.appendChild(msg);
+    if (scroll) el.scrollTop = el.scrollHeight;
+    return msg;
+}
+
+function copyMsg(btn) {
+    const text = btn.closest('.msg').querySelector('.msg-bubble').innerText;
+    navigator.clipboard.writeText(text).then(() => showToast('Copied!'));
+}
+
+function updateTokenBar() {
+    document.getElementById('token-bar').innerText = `~${totalTokens.toLocaleString()} tokens used this session`;
+}
+
+// ── Markdown renderer (minimal, no deps) ──────────────────────────────────────
+function markdownToHTML(md) {
+    let h = md
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        // fenced code blocks
+        .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code class="lang-$1">$2</code></pre>')
+        // inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // bold
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // italic
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // headers
+        .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+        .replace(/^## (.+)$/gm,  '<h3>$1</h3>')
+        .replace(/^# (.+)$/gm,   '<h2>$1</h2>')
+        // unordered list
+        .replace(/^[*-] (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+        // paragraphs (double newline)
+        .replace(/\n{2,}/g, '</p><p>')
+        // single newline
+        .replace(/\n/g, '<br>');
+    return `<p>${h}</p>`;
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+function toggleSysPrompt() {
+    const a = document.getElementById('sys-prompt-area');
+    a.style.display = a.style.display === 'none' ? 'block' : 'none';
+}
+
+init();
+</script>
+{% endblock %}

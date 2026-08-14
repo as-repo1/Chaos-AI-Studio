@@ -12,6 +12,13 @@
 
 **A self-hosted, GPU-accelerated AI management dashboard for running LLMs, image generation, video AI, music generation, and text-to-speech — entirely offline.**
 
+<p align="center">
+  <img src="assets/dashboard.png" alt="Chaos AI Studio Dashboard" width="800">
+</p>
+<p align="center">
+  <img src="assets/settings.png" alt="Chaos AI Studio Settings" width="800">
+</p>
+
 [![Version](https://img.shields.io/badge/version-1.0.0-a3e635?style=flat-square)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-f97316?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://python.org)

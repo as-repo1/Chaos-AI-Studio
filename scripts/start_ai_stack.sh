@@ -54,5 +54,6 @@ exec "$LLAMA_BIN" \
     -ngl "$NGL" \
     -c "$CTX_SIZE" \
     -t "$THREADS" \
-    --vulkan-device "$VULKAN_DEVICE" \
+    -mg "$VULKAN_DEVICE" \
+    -sm none \
     --log-format text
