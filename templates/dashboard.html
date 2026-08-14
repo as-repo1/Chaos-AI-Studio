@@ -11,7 +11,7 @@
     </div>
     <div>
         <h1>AI Management Hub</h1>
-        <p>Manage your localized AI instances with zero friction.</p>
+        <p>Manage your local AI stack with zero friction.</p>
     </div>
 </header>
 
@@ -21,331 +21,309 @@
         <div class="monitor-card">
             <span class="monitor-label">CPU Usage</span>
             <span class="monitor-value" id="cpu-val">0%</span>
-            <div class="progress-bar"><div class="progress-fill" id="cpu-fill" style="width: 0%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" id="cpu-fill" style="width:0%"></div></div>
         </div>
         <div class="monitor-card">
             <span class="monitor-label">RAM Usage</span>
             <span class="monitor-value" id="ram-val">0GB / 0GB</span>
-            <div class="progress-bar"><div class="progress-fill" id="ram-fill" style="width: 0%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" id="ram-fill" style="width:0%"></div></div>
         </div>
         <div class="monitor-card">
             <span class="monitor-label">Swap Memory</span>
             <span class="monitor-value" id="swap-val">0GB / 0GB</span>
-            <div class="progress-bar"><div class="progress-fill" id="swap-fill" style="width: 0%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" id="swap-fill" style="width:0%"></div></div>
         </div>
         <div class="monitor-card">
-            <span class="monitor-label">GPU VRAM Usage</span>
+            <span class="monitor-label">GPU VRAM</span>
             <span class="monitor-value" id="gpu-val">0GB / 4GB</span>
-            <div class="progress-bar"><div class="progress-fill" id="gpu-fill" style="width: 0%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" id="gpu-fill" style="width:0%"></div></div>
         </div>
     </div>
 </section>
 
 <section class="panel">
     <h2>Active Services</h2>
-    <div class="service-grid" id="service-grid">
-        <!-- Services injected by JS -->
-    </div>
+    <div class="service-grid" id="service-grid"><!-- injected by JS --></div>
 </section>
 
 <!-- Settings Modal -->
 <dialog id="settings-modal">
-    <h2 id="settings-title" style="margin-bottom: 1rem;">Settings</h2>
-    <div id="settings-body" style="display: flex; flex-direction: column; gap: 1rem;">
-        <!-- Dynamic forms injected here -->
-    </div>
-    <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-        <button class="btn secondary" style="flex: 1;" onclick="document.getElementById('settings-modal').close()">Cancel</button>
-        <button class="btn primary" style="flex: 1;" onclick="saveSettings()">Save</button>
+    <h2 id="settings-title" style="margin-bottom:1.25rem;">Settings</h2>
+    <div id="settings-body" style="display:flex;flex-direction:column;gap:1rem;"></div>
+    <div style="display:flex;gap:1rem;margin-top:2rem;">
+        <button class="btn secondary" style="flex:1;" onclick="document.getElementById('settings-modal').close()">Cancel</button>
+        <button class="btn primary" style="flex:1;" onclick="saveSettings()">Save</button>
     </div>
 </dialog>
 {% endblock %}
 
 {% block scripts %}
 <script>
+    // ── Service definitions ───────────────────────────────────────────────────
     const services = [
-        { id: 'llama', name: 'Text AI (Llama)', url: 'http://localhost:3000' },
-        { id: 'comfyui', name: 'Image AI (ComfyUI)', url: 'http://localhost:8188' },
-        { id: 'wan_video', name: 'Video AI (Wan2.2)', url: 'http://localhost:8188' },
-        { id: 'musicgen', name: 'Audio AI (MusicGen)', url: 'http://localhost:7860' },
-        { id: 'xtts', name: 'Voice Cloning (XTTS)', url: 'http://localhost:8020' },
-        { id: 'text2speach', name: 'TTS (VibeVoice)', url: 'http://localhost:8090' }
+        { id:'llama',       name:'Text AI (Llama)',       url:'http://localhost:8080', supportsChat: true,  gpu: true },
+        { id:'comfyui',     name:'Image AI (ComfyUI)',    url:'http://localhost:8188', supportsChat: false, gpu: false },
+        { id:'wan_video',   name:'Video AI (Wan2.2)',     url:'http://localhost:8188', supportsChat: false, gpu: false },
+        { id:'musicgen',    name:'Audio AI (MusicGen)',   url:'http://localhost:7860', supportsChat: false, gpu: false },
+        { id:'text2speach', name:'TTS (VibeVoice)',       url:'http://localhost:8090', supportsChat: false, gpu: true },
+        { id:'xtts',        name:'Voice Cloning (XTTS)',  url:'http://localhost:8020', supportsChat: false, gpu: false },
     ];
 
-    let lastStatus = {};
-    const pendingStarts = new Set();
-    const pendingStops = new Set();
-    let textModels = [];
-    let appConfig = {};
-    let currentEditingService = null;
+    // ── State ─────────────────────────────────────────────────────────────────
+    let lastStatus             = {};
+    let lastRenderKey          = '';
+    const pendingStarts        = new Set();
+    const pendingStops         = new Set();
+    let textModels             = [];
+    let audioModels            = [];
+    let vulkanDevices          = [];
+    let appConfig              = {};
+    let currentEditingService  = null;
 
+    // ── Init ──────────────────────────────────────────────────────────────────
     async function init() {
-        await fetchConfig();
-        await fetchTextModels();
+        await Promise.all([fetchConfig(), fetchTextModels(), fetchAudioModels(), fetchVulkanDevices()]);
         fetchStatus();
         fetchSystem();
-        setInterval(fetchStatus, 2000);
-        setInterval(fetchSystem, 1000);
+        setInterval(fetchStatus, 2500);
+        setInterval(fetchSystem, 1200);
     }
 
-    async function fetchConfig() {
-        try {
-            const res = await fetch('/api/config');
-            appConfig = await res.json();
-        } catch (e) { console.error("Config fetch error", e); }
-    }
+    async function fetchConfig()  { try { appConfig      = await (await fetch('/api/config')).json();        } catch(e){} }
+    async function fetchTextModels()  { try { textModels  = await (await fetch('/api/models/text')).json();  } catch(e){} }
+    async function fetchAudioModels() { try { audioModels = await (await fetch('/api/models/audio')).json(); } catch(e){} }
+    async function fetchVulkanDevices() { try { vulkanDevices = await (await fetch('/api/gpu/devices')).json(); } catch(e){} }
 
-    async function saveSettings() {
-        if (!currentEditingService) return;
-        
-        const body = document.getElementById('settings-body');
-        const inputs = body.querySelectorAll('input');
-        
-        let newConfig = { ...appConfig };
-        if (!newConfig[currentEditingService]) newConfig[currentEditingService] = {};
-        
-        inputs.forEach(inp => {
-            if (inp.type === 'checkbox') {
-                newConfig[currentEditingService][inp.name] = inp.checked;
-            } else {
-                newConfig[currentEditingService][inp.name] = isNaN(inp.value) ? inp.value : Number(inp.value);
-            }
-        });
-
-        try {
-            await fetch('/api/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newConfig)
-            });
-            appConfig = newConfig;
-            document.getElementById('settings-modal').close();
-            showToast("Settings saved!");
-        } catch (e) {
-            showToast("Error saving settings", true);
-        }
-    }
-
-    function openSettings(serviceId) {
-        currentEditingService = serviceId;
-        const modal = document.getElementById('settings-modal');
-        const title = document.getElementById('settings-title');
-        const body = document.getElementById('settings-body');
-        
-        title.innerText = `${services.find(s => s.id === serviceId)?.name || serviceId} Settings`;
-        body.innerHTML = '';
-        
-        const conf = appConfig[serviceId] || {};
-        
-        if (serviceId === 'llama') {
-            body.innerHTML = `
-                <label>Context Size (--ctx-size)</label>
-                <input type="number" name="ctx_size" value="${conf.ctx_size || 4096}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>GPU Layers (-ngl)</label>
-                <input type="number" name="ngl" value="${conf.ngl || 99}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>Threads (-t)</label>
-                <input type="number" name="threads" value="${conf.threads || 4}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>Port</label>
-                <input type="number" name="port" value="${conf.port || 8080}" class="model-select">
-            `;
-        } else if (serviceId === 'comfyui') {
-            body.innerHTML = `
-                <label style="display:flex; align-items:center; gap:0.5rem;">
-                    <input type="checkbox" name="lowvram" ${conf.lowvram ? 'checked' : ''}> Use --lowvram
-                </label>
-                <label style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem;">
-                    <input type="checkbox" name="normalvram" ${conf.normalvram ? 'checked' : ''}> Use --normalvram
-                </label>
-            `;
-        } else if (serviceId === 'text2speach') {
-            body.innerHTML = `
-                <label>Context Size (--ctx-size)</label>
-                <input type="number" name="ctx_size" value="${conf.ctx_size || 1024}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>GPU Layers (-ngl)</label>
-                <input type="number" name="ngl" value="${conf.ngl || 99}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>Threads (-t)</label>
-                <input type="number" name="threads" value="${conf.threads || 4}" class="model-select" style="margin-bottom:0.5rem;">
-                <label>Port</label>
-                <input type="number" name="port" value="${conf.port || 8090}" class="model-select">
-            `;
-        } else {
-            body.innerHTML = '<p>No specific settings available for this service.</p>';
-        }
-        
-        modal.showModal();
-    }
-
+    // ── System telemetry ──────────────────────────────────────────────────────
     async function fetchSystem() {
         try {
-            const res = await fetch('/api/system');
-            const data = await res.json();
-            document.getElementById('cpu-val').innerText = `${data.cpu_percent}%`;
-            document.getElementById('cpu-fill').style.width = `${data.cpu_percent}%`;
-            
-            document.getElementById('ram-val').innerText = `${data.ram_used_gb}GB / ${data.ram_total_gb}GB`;
-            document.getElementById('ram-fill').style.width = `${data.ram_percent}%`;
-            
-            document.getElementById('swap-val').innerText = `${data.swap_used_gb}GB / ${data.swap_total_gb}GB`;
-            document.getElementById('swap-fill').style.width = `${data.swap_percent}%`;
-            
-            document.getElementById('gpu-val').innerText = `${data.gpu_used_gb}GB / ${data.gpu_total_gb}GB`;
-            document.getElementById('gpu-fill').style.width = `${data.gpu_vram_percent}%`;
-            
-            if (data.ram_percent > 90) {
-                document.getElementById('ram-fill').style.background = 'var(--danger)';
-            } else {
-                document.getElementById('ram-fill').style.background = 'var(--primary)';
-            }
-            
-            if (data.gpu_vram_percent > 90) {
-                document.getElementById('gpu-fill').style.background = 'var(--danger)';
-            } else {
-                document.getElementById('gpu-fill').style.background = 'var(--primary)';
-            }
-        } catch (e) {
-            console.error("System fetch error", e);
-        }
+            const d = await (await fetch('/api/system')).json();
+            set('cpu-val',  `${d.cpu_percent}%`);
+            setWidth('cpu-fill',  d.cpu_percent);
+            set('ram-val',  `${d.ram_used_gb}GB / ${d.ram_total_gb}GB`);
+            setWidth('ram-fill',  d.ram_percent, d.ram_percent > 90);
+            set('swap-val', `${d.swap_used_gb}GB / ${d.swap_total_gb}GB`);
+            setWidth('swap-fill', d.swap_percent);
+            set('gpu-val',  `${d.gpu_used_gb}GB / ${d.gpu_total_gb}GB`);
+            setWidth('gpu-fill',  d.gpu_vram_percent, d.gpu_vram_percent > 85);
+        } catch(e) {}
+    }
+    function set(id, v) { const el = document.getElementById(id); if(el) el.innerText = v; }
+    function setWidth(id, pct, danger=false) {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.style.width = `${Math.min(pct,100)}%`;
+        el.style.background = danger ? 'var(--danger)' : 'var(--primary)';
     }
 
-    async function fetchTextModels() {
-        try {
-            const res = await fetch('/api/models/text');
-            textModels = await res.json();
-        } catch(e) {
-            console.error("Model fetch error", e);
-        }
-    }
-
+    // ── Status + render ───────────────────────────────────────────────────────
     async function fetchStatus() {
         try {
-            const res = await fetch('/api/status');
-            const data = await res.json();
-            
+            const data = await (await fetch('/api/status')).json();
             services.forEach(s => {
-                const isRunning = data[s.id]?.running;
-                const wasPending = pendingStarts.has(s.id) || pendingStops.has(s.id);
-                if (isRunning) pendingStarts.delete(s.id);
-                if (!isRunning) pendingStops.delete(s.id);
-                // Force a re-render if a pending state just cleared
-                if (wasPending && !pendingStarts.has(s.id) && !pendingStops.has(s.id)) {
-                    lastRenderState = "";
-                }
+                if (data[s.id]?.running)  pendingStarts.delete(s.id);
+                if (!data[s.id]?.running) pendingStops.delete(s.id);
             });
-
             lastStatus = data;
             renderServices(data);
-        } catch (e) {
-            console.error("Status fetch error", e);
-        }
+        } catch(e) {}
     }
 
-    async function toggleService(id) {
-        const isCurrentlyRunning = lastStatus[id]?.running || false;
-        
-        let endpoint = `/api/${isCurrentlyRunning ? 'stop' : 'start'}/${id}`;
-        
-        pendingStarts.delete(id);
-        pendingStops.delete(id);
-        
-        if (isCurrentlyRunning) {
-            pendingStops.add(id);
-        } else {
-            pendingStarts.add(id);
-        }
-        
-        renderServices(lastStatus);
+    function renderServices(statusData) {
+        const key = services.map(s => {
+            const d = statusData[s.id] || {};
+            return `${s.id}:${d.state}:${d.running}:${pendingStarts.has(s.id)}:${pendingStops.has(s.id)}`;
+        }).join('|');
+        const grid = document.getElementById('service-grid');
+        if (key === lastRenderKey && grid.innerHTML !== '') return;
+        lastRenderKey = key;
+        grid.innerHTML = '';
 
+        services.forEach(s => {
+            const d          = statusData[s.id] || {};
+            const isRunning  = d.running  || false;
+            const state      = d.state    || 'stopped';   // stopped|starting|ready|crashed
+            const isStarting = pendingStarts.has(s.id);
+            const isStopping = pendingStops.has(s.id);
+            const isCrashed  = state === 'crashed' && !isStarting && !isStopping;
+            const isReady    = state === 'ready'   && isRunning;
+
+            // Status pill
+            let statePill = '';
+            if (isCrashed)                 statePill = `<span class="state-pill crashed">⚠ Crashed</span>`;
+            else if (isStarting)           statePill = `<span class="state-pill starting">Starting…</span>`;
+            else if (isStopping)           statePill = `<span class="state-pill stopping">Stopping…</span>`;
+            else if (isReady)              statePill = `<span class="state-pill ready">✓ Ready</span>`;
+            else if (isRunning)            statePill = `<span class="state-pill loading">Loading model…</span>`;
+
+            // Model badge from config
+            let modelBadge = '';
+            const cfg = appConfig[s.id] || {};
+            if ((s.id === 'llama' || s.id === 'text2speach') && cfg.model) {
+                const mName = cfg.model.replace(/\.gguf$/i,'').replace(/-q\d.*/i,'');
+                modelBadge = `<div class="model-badge" title="${cfg.model}">${mName}</div>`;
+            }
+
+            // GPU badge
+            const gpuBadge = s.gpu ? `<span class="gpu-badge">Vulkan</span>` : '';
+
+            // Button
+            let btnText = isRunning ? 'Stop' : 'Start';
+            if (isStarting) btnText = 'Starting…';
+            if (isStopping) btnText = 'Stopping…';
+            const btnDisabled = (isStarting || isStopping) ? 'disabled' : '';
+
+            // Quick-open links
+            let quickLinks = '';
+            if (isReady) {
+                quickLinks = `<a href="${s.url}" target="_blank" class="btn secondary">Open ↗</a>`;
+                if (s.supportsChat) quickLinks += `<a href="/chat" class="btn secondary">Chat</a>`;
+            }
+
+            const card = document.createElement('div');
+            card.className = `service-card ${isRunning && !isStopping ? 'running' : ''} ${isCrashed ? 'crashed' : ''} ${(isStarting||isStopping) ? 'loading' : ''}`;
+            card.innerHTML = `
+                <div class="service-header">
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                            <h3 style="margin:0;">${s.name}</h3>
+                            ${gpuBadge}
+                        </div>
+                        ${modelBadge}
+                        ${statePill}
+                    </div>
+                    <div style="display:flex;gap:0.5rem;align-items:center;flex-shrink:0;">
+                        <button class="settings-btn" onclick="toggleLogs('${s.id}','${s.name}')" title="Logs">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        </button>
+                        <button class="settings-btn gear-btn" onclick="openSettings('${s.id}')" title="Settings">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        </button>
+                        <div class="status-indicator"></div>
+                    </div>
+                </div>
+                <div class="service-actions">
+                    <button class="btn primary" style="flex:1;" onclick="toggleService('${s.id}')" ${btnDisabled}>${btnText}</button>
+                    ${(isStarting||isStopping||isRunning) ? `<button class="btn force-stop-btn" onclick="forceStop('${s.id}')" title="Force Kill"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+                    ${quickLinks}
+                </div>
+                ${isCrashed ? `<div class="crash-banner"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Service crashed unexpectedly. <button class="btn primary" style="padding:0.25rem 0.75rem;font-size:0.8rem;" onclick="toggleService('${s.id}')">Restart</button></div>` : ''}
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    // ── Service control ───────────────────────────────────────────────────────
+    async function toggleService(id) {
+        const isRunning = lastStatus[id]?.running || false;
+        pendingStarts.delete(id); pendingStops.delete(id);
+        isRunning ? pendingStops.add(id) : pendingStarts.add(id);
+        renderServices(lastStatus);
         try {
-            let reqOptions = { method: 'POST' };
-            const res = await fetch(endpoint, reqOptions);
+            const res  = await fetch(`/api/${isRunning ? 'stop' : 'start'}/${id}`, { method:'POST' });
             const data = await res.json();
             if (!res.ok) {
-                showToast(data.error || 'Operation failed', true);
-                pendingStarts.delete(id);
-                pendingStops.delete(id);
+                showToast(data.error || 'Failed', true);
+                pendingStarts.delete(id); pendingStops.delete(id);
                 renderServices(lastStatus);
             } else {
-                const friendlyName = services.find(s => s.id === id)?.name || id;
-                showToast(isCurrentlyRunning ? `Stopping ${friendlyName}...` : `Starting ${friendlyName}...`);
+                const name = services.find(s=>s.id===id)?.name || id;
+                showToast(isRunning ? `Stopping ${name}…` : `Starting ${name}…`);
             }
-        } catch (e) {
-            showToast("Connection error.", true);
-            pendingStarts.delete(id);
-            pendingStops.delete(id);
+        } catch(e) {
+            showToast('Connection error', true);
+            pendingStarts.delete(id); pendingStops.delete(id);
             renderServices(lastStatus);
         }
     }
 
     async function forceStop(id) {
-        pendingStarts.delete(id);
-        pendingStops.delete(id);
-        lastRenderState = "";
-        renderServices(lastStatus);
-        showToast(`Force stopping ${id}...`);
-        try {
-            await fetch(`/api/stop/${id}`, { method: 'POST' });
-        } catch (e) {
-            console.error(e);
-        }
-        fetchStatus();
+        pendingStarts.delete(id); pendingStops.delete(id);
+        showToast(`Force killing ${id}…`);
+        try { await fetch(`/api/stop/${id}`, { method:'POST' }); } catch(e) {}
+        lastRenderKey = '';
+        setTimeout(fetchStatus, 800);
     }
 
-    let lastRenderState = "";
+    // ── Settings modal ────────────────────────────────────────────────────────
+    async function openSettings(serviceId) {
+        await Promise.all([fetchConfig(), fetchTextModels(), fetchAudioModels(), fetchVulkanDevices()]);
+        currentEditingService = serviceId;
+        const svc   = services.find(s => s.id === serviceId);
+        const modal = document.getElementById('settings-modal');
+        document.getElementById('settings-title').innerText = `${svc?.name || serviceId} — Settings`;
+        const body  = document.getElementById('settings-body');
+        const conf  = appConfig[serviceId] || {};
 
-    function renderServices(statusData) {
-        const grid = document.getElementById('service-grid');
-        
-        // Calculate current state fingerprint
-        const currentState = services.map(s => {
-            const isRunning = statusData[s.id]?.running || false;
-            const isStarting = pendingStarts.has(s.id);
-            const isStopping = pendingStops.has(s.id);
-            return `${s.id}:${isRunning}:${isStarting}:${isStopping}`;
-        }).join('|');
-        
-        // Only re-render if state changed or we haven't rendered yet
-        if (currentState === lastRenderState && grid.innerHTML !== '') {
-            return;
-        }
-        lastRenderState = currentState;
-        
-        grid.innerHTML = '';
-        
-        services.forEach(s => {
-            const isRunning = statusData[s.id]?.running || false;
-            const isStarting = pendingStarts.has(s.id);
-            const isStopping = pendingStops.has(s.id);
-            
-            const card = document.createElement('div');
-            card.className = `service-card ${isRunning && !isStopping ? 'running' : ''} ${(isStarting || isStopping) ? 'loading' : ''}`;
-            
-            let btnText = isRunning ? 'Stop' : 'Start';
-            if (isStarting) btnText = 'Starting...';
-            if (isStopping) btnText = 'Stopping...';
-            
-            let btnDisabled = (isStarting || isStopping) ? 'disabled' : '';
+        // Build device options
+        const deviceOpts = vulkanDevices.length
+            ? vulkanDevices.map((d,i) => `<option value="${d.index}" ${(conf.vulkan_device||0)==d.index?'selected':''}>${d.name}</option>`).join('')
+            : `<option value="0">Device 0 (default)</option>`;
 
-            card.innerHTML = `
-                <div class="service-header">
-                    <h3>${s.name}</h3>
-                    <div style="display:flex; gap:1rem; align-items:center;">
-                        <button class="settings-btn" onclick="toggleLogs('${s.id}', '${s.name}')" title="Logs">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        </button>
-                        <button class="settings-btn gear-btn" onclick="openSettings('${s.id}')" title="Settings">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                        </button>
-                        <div class="status-indicator"></div>
-                    </div>
-                </div>
-                <div class="service-actions" style="display:flex; gap:0.5rem; width:100%;">
-                    <button class="btn primary" style="flex:1;" onclick="toggleService('${s.id}')" ${btnDisabled}>${btnText}</button>
-                    ${(isStarting || isStopping || isRunning) ? `<button class="btn force-stop-btn" onclick="forceStop('${s.id}')" title="Force Kill"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>` : ''}
-                    ${(isRunning && !isStopping) ? `<a href="${s.url}" target="_blank" class="btn secondary">Open</a>` : ''}
-                </div>
+        if (serviceId === 'llama') {
+            const modelOpts = textModels.map(m => `<option value="${m}" ${conf.model===m?'selected':''}>${m}</option>`).join('');
+            body.innerHTML = `
+                <label>Model</label>
+                <select name="model" class="model-select" style="margin-bottom:0.5rem;">${modelOpts}</select>
+                <label>Context Size (tokens)</label>
+                <input type="number" name="ctx_size" value="${conf.ctx_size||4096}" class="model-select" style="margin-bottom:0.5rem;">
+                <label>GPU Layers (-ngl)</label>
+                <input type="number" name="ngl" value="${conf.ngl||99}" class="model-select" style="margin-bottom:0.5rem;">
+                <label>Threads</label>
+                <input type="number" name="threads" value="${conf.threads||4}" class="model-select" style="margin-bottom:0.5rem;">
+                <label>Port</label>
+                <input type="number" name="port" value="${conf.port||8080}" class="model-select" style="margin-bottom:0.5rem;">
+                <label>Vulkan Device</label>
+                <select name="vulkan_device" class="model-select">${deviceOpts}</select>
             `;
-            grid.appendChild(card);
+        } else if (serviceId === 'text2speach') {
+            const modelOpts = audioModels.map(m => `<option value="${m}" ${conf.model===m?'selected':''}>${m}</option>`).join('');
+            body.innerHTML = `
+                <label>Model</label>
+                <select name="model" class="model-select" style="margin-bottom:0.5rem;">${modelOpts}</select>
+                <label>Context Size (tokens)</label>
+                <input type="number" name="ctx_size" value="${conf.ctx_size||1024}" class="model-select" style="margin-bottom:0.5rem;">
+                <label>GPU Layers (-ngl)</label>
+                <input type="number" name="ngl" value="${conf.ngl||99}" class="model-select" style="margin-bottom:0.5rem;">
+                <label>Threads</label>
+                <input type="number" name="threads" value="${conf.threads||4}" class="model-select" style="margin-bottom:0.5rem;">
+                <label>Port</label>
+                <input type="number" name="port" value="${conf.port||8090}" class="model-select" style="margin-bottom:0.5rem;">
+                <label>Vulkan Device</label>
+                <select name="vulkan_device" class="model-select">${deviceOpts}</select>
+            `;
+        } else if (serviceId === 'comfyui') {
+            body.innerHTML = `
+                <label style="display:flex;align-items:center;gap:0.5rem;">
+                    <input type="checkbox" name="lowvram" ${conf.lowvram?'checked':''}> Use --lowvram (recommended for 4GB)
+                </label>
+                <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;">
+                    <input type="checkbox" name="normalvram" ${conf.normalvram?'checked':''}> Use --normalvram
+                </label>
+            `;
+        } else {
+            body.innerHTML = '<p style="color:var(--text-muted);">No settings for this service.</p>';
+        }
+        modal.showModal();
+    }
+
+    async function saveSettings() {
+        if (!currentEditingService) return;
+        const body    = document.getElementById('settings-body');
+        let newConfig = { ...appConfig };
+        if (!newConfig[currentEditingService]) newConfig[currentEditingService] = {};
+        body.querySelectorAll('input, select').forEach(el => {
+            if (el.type === 'checkbox') newConfig[currentEditingService][el.name] = el.checked;
+            else newConfig[currentEditingService][el.name] = isNaN(el.value) || el.tagName === 'SELECT' ? el.value : Number(el.value);
         });
+        try {
+            await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(newConfig) });
+            appConfig = newConfig;
+            document.getElementById('settings-modal').close();
+            showToast('Settings saved!');
+            lastRenderKey = '';   // force re-render so model badge updates
+            renderServices(lastStatus);
+        } catch(e) { showToast('Error saving', true); }
     }
 
     init();
