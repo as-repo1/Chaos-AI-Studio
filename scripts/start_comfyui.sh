@@ -9,6 +9,6 @@ if [ ! -f "extra_model_paths.yaml" ]; then
     echo "    checkpoints: ." >> extra_model_paths.yaml
 fi
 
-echo "Starting ComfyUI on Intel XPU..."
+echo "Starting ComfyUI on Intel XPU with custom args: $COMFYUI_ARGS"
 # ComfyUI natively detects XPU and will manage VRAM automatically
-python main.py --use-pytorch-cross-attention
+python main.py --use-pytorch-cross-attention $COMFYUI_ARGS

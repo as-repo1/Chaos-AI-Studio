@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header>
+    <div>
+        <svg width="64" height="64" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="44" stroke="#a3e635" stroke-width="6" stroke-dasharray="200 280" stroke-linecap="round" transform="rotate(45 50 50)"/>
+            <circle cx="50" cy="50" r="28" stroke="#f97316" stroke-width="6" stroke-dasharray="100 180" stroke-linecap="round" transform="rotate(225 50 50)"/>
+            <circle cx="50" cy="50" r="10" fill="#a3e635"/>
+        </svg>
+    </div>
+    <div>
+        <h1>Model Hub</h1>
+        <p>Discover and manage your localized AI models.</p>
+    </div>
+</header>
+
+<section class="panel models-panel">
+    <h2>Model Catalogue</h2>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem;">Curated models optimized for 4GB VRAM. One click to download.</p>
+    <div class="catalogue-list" id="catalogue-grid">
+        <!-- Catalogue injected by JS -->
+    </div>
+</section>
+
+<section class="panel models-panel">
+    <h2>Your Local Models</h2>
+    <div class="table-container">
+        <table id="models-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Models injected by JS -->
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function fetchCatalogue() {
+        try {
+            const res = await fetch('/api/catalogue');
+            const data = await res.json();
+            const grid = document.getElementById('catalogue-grid');
+            grid.innerHTML = '';
+            
+            data.forEach(m => {
+                const card = document.createElement('div');
+                card.className = 'catalogue-item';
+                
+                let btnHtml = '';
+                if (m.is_downloaded) {
+                    btnHtml = `<button class="btn secondary" disabled>Downloaded</button>`;
+                } else if (m.is_downloading) {
+                    btnHtml = `<button class="btn secondary" disabled>Downloading...</button>`;
+                } else {
+                    btnHtml = `<button class="btn primary" onclick="downloadModel('${m.id}')" style="width: auto; padding: 0.5rem 1rem;">Download</button>`;
+                }
+
+                card.innerHTML = `
+                    <div class="details">
+                        <h4>${m.name} <span class="badge ${getBadgeClass(m.type)}">${m.type}</span></h4>
+                        <p>${m.description}</p>
+                    </div>
+                    <div class="actions">
+                        ${btnHtml}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        } catch (e) {
+            console.error("Failed to fetch catalogue", e);
+        }
+    }
+
+    async function downloadModel(id) {
+        try {
+            const res = await fetch(`/api/download/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast("Download started!");
+                fetchCatalogue();
+            } else {
+                showToast(data.error, true);
+            }
+        } catch (e) {
+            showToast("Connection error.", true);
+        }
+    }
+
+    async function fetchModels() {
+        try {
+            const res = await fetch('/api/models');
+            const data = await res.json();
+            const tbody = document.querySelector('#models-table tbody');
+            tbody.innerHTML = '';
+            
+            data.forEach(m => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${m.name}</td>
+                        <td><span class="badge ${getBadgeClass(m.type)}">${m.type}</span></td>
+                        <td>${m.size}</td>
+                    </tr>
+                `;
+            });
+        } catch (e) {
+            console.error("Failed to fetch models", e);
+        }
+    }
+
+    // Initialize
+    function getBadgeClass(type) {
+        if (type.includes('Text') || type.includes('Multimodal') || type.includes('Embedding')) return 'text';
+        if (type.includes('Image')) return 'image';
+        if (type.includes('Video')) return 'video';
+        if (type.includes('Audio')) return 'audio';
+        return 'image';
+    }
+
+    fetchCatalogue();
+    fetchModels();
+    setInterval(fetchCatalogue, 5000);
+</script>
+{% endblock %}

@@ -1,19 +1,49 @@
-# Virtual Environments
+# Python
 venv/
-env/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Mac
-.DS_Store
+# Environment
+.env
+.env.*
 
-# Ignore massive models if accidentally placed here
+# App runtime
+config.json
+/tmp/*.log
+
+# Models — never commit model weights
+*.gguf
 *.safetensors
 *.bin
-*.ckpt
-*.gguf
 *.pt
 *.pth
 
-# App-specific logs and sqlite
-app.log
-*.db
+# llama.cpp compiled from source
+llama.cpp-src/
+llama-bin/
+
+# Old binaries
+llama-server-new
+llama-server-new.zip
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

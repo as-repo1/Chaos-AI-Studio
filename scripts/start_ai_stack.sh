@@ -4,24 +4,23 @@
 # Optimized for Intel Arc A370M (4GB VRAM)
 # ==============================================================================
 
-if [ "$#" -lt 1 ]; then
-    echo -e "\033[1;31mError: No model provided.\033[0m"
-    echo "Usage: $0 /path/to/model.gguf"
-    echo "Example: $0 ~/models/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+# No model required as an argument since we use Router Mode
+MODELS_DIR="$HOME/models/llm-models"
+
+if [ ! -d "$MODELS_DIR" ]; then
+    echo -e "\033[1;31mError: Models directory not found at '$MODELS_DIR'\033[0m"
     exit 1
 fi
 
-MODEL_PATH="$1"
-
-if [ ! -f "$MODEL_PATH" ]; then
-    echo -e "\033[1;31mError: Model file not found at '$MODEL_PATH'\033[0m"
-    exit 1
+# Warn if no models are present
+if [ -z "$(ls -A "$MODELS_DIR"/*.gguf 2>/dev/null)" ]; then
+    echo -e "\033[1;33mWarning: No .gguf model files found in '$MODELS_DIR'. Add models before sending requests.\033[0m"
 fi
 
 echo -e "\033[1;34m=== [1/3] Checking llama.cpp engine ===\033[0m"
 if ! command -v llama-server &> /dev/null; then
-    echo "llama-cpp is not installed. Requesting sudo permission to install via pacman..."
-    sudo pacman -S --noconfirm llama-cpp
+    echo -e "\033[1;31mError: llama-server is not installed. Please install llama-cpp first.\033[0m"
+    exit 1
 else
     echo "llama-cpp is already installed."
 fi
@@ -32,24 +31,24 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-if ! sudo docker ps -a --format '{{.Names}}' | grep -Eq "^open-webui\$"; then
-    echo "Creating and starting new Open-WebUI container..."
-    sudo docker run -d -p 3000:8080 \
-      --add-host=host.docker.internal:host-gateway \
-      -v open-webui:/app/backend/data \
-      --name open-webui \
-      --restart always \
-      -e OPENAI_API_BASE_URL="http://host.docker.internal:8080/v1" \
-      -e OPENAI_API_KEY="llama-cpp-key" \
-      -e ENABLE_OLLAMA_API="False" \
-      ghcr.io/open-webui/open-webui:main
-else
-    if ! sudo docker ps --format '{{.Names}}' | grep -Eq "^open-webui\$"; then
-        echo "Starting existing Open-WebUI container..."
-        sudo docker start open-webui
+if ! docker ps | grep -q open-webui; then
+    if ! docker ps -a | grep -q open-webui; then
+        echo "Creating and starting new Open-WebUI container..."
+        docker run -d -p 3000:8080 \
+          --add-host=host.docker.internal:host-gateway \
+          -v open-webui:/app/backend/data \
+          --name open-webui \
+          --restart always \
+          -e OPENAI_API_BASE_URL="http://host.docker.internal:8080/v1" \
+          -e OPENAI_API_KEY="llama-cpp-key" \
+          -e ENABLE_OLLAMA_API="False" \
+          ghcr.io/open-webui/open-webui:main
     else
-        echo "Open-WebUI container is already running."
+        echo "Starting existing Open-WebUI container..."
+        docker start open-webui
     fi
+else
+    echo "Open-WebUI container is already running."
 fi
 
 echo -e "\n\033[1;34m=== [3/3] Starting llama-server Backend ===\033[0m"
@@ -58,12 +57,18 @@ echo -e "Open your browser and navigate to: \033[1;36mhttp://localhost:3000\033[
 echo "Press Ctrl+C to stop the AI server."
 echo "------------------------------------------------------------"
 
-# Run the API server with Intel Arc 4GB VRAM optimizations
+# Dynamic variables loaded from config (defaults match app.py safe defaults)
+CTX_SIZE="${CTX_SIZE:-4096}"
+NGL="${NGL:-99}"
+PORT="${LLAMA_PORT:-8080}"
+THREADS="${THREADS:-4}"
+
+# Run the API server with Intel Arc 4GB VRAM optimizations in Router Mode
 llama-server \
-    -m "$MODEL_PATH" \
-    --alias "$(basename "$MODEL_PATH" .gguf)" \
-    --port 8080 \
+    --models-dir "$MODELS_DIR" \
+    --models-max 1 \
+    --port "$PORT" \
     --host "0.0.0.0" \
-    -ngl 99 \
-    -c 16384 \
-    -t 4
+    -ngl "$NGL" \
+    -c "$CTX_SIZE" \
+    -t "$THREADS"

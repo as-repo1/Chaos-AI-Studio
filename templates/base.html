@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaos AI Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='44' stroke='%23a3e635' stroke-width='8' stroke-dasharray='200 280' stroke-linecap='round' transform='rotate(45 50 50)'/><circle cx='50' cy='50' r='28' stroke='%23f97316' stroke-width='8' stroke-dasharray='100 180' stroke-linecap='round' transform='rotate(225 50 50)'/><circle cx='50' cy='50' r='10' fill='%23a3e635'/></svg>">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="app-layout">
+        <nav class="sidebar">
+            <div class="nav-brand">
+                <svg width="42" height="42" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="44" stroke="#a3e635" stroke-width="8" stroke-dasharray="200 280" stroke-linecap="round" transform="rotate(45 50 50)"/>
+                    <circle cx="50" cy="50" r="28" stroke="#f97316" stroke-width="8" stroke-dasharray="100 180" stroke-linecap="round" transform="rotate(225 50 50)"/>
+                    <circle cx="50" cy="50" r="10" fill="#a3e635"/>
+                </svg>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-icon {% if request.path == '/' %}active{% endif %}" title="Dashboard">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                </a>
+                <a href="/models" class="nav-icon {% if request.path == '/models' %}active{% endif %}" title="Model Hub">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                </a>
+            </div>
+            <div class="nav-bottom">
+                <a href="#" class="nav-icon" title="Toggle Theme" onclick="cycleTheme()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+                </a>
+                <a href="#" class="nav-icon" title="Settings">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </a>
+            </div>
+        </nav>
+        
+        <main class="main-content">
+            <svg class="bg-watermark" width="600" height="600" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="44" stroke="#a3e635" stroke-width="2" stroke-dasharray="200 280" stroke-linecap="round" transform="rotate(45 50 50)"/>
+                <circle cx="50" cy="50" r="28" stroke="#f97316" stroke-width="2" stroke-dasharray="100 180" stroke-linecap="round" transform="rotate(225 50 50)"/>
+                <circle cx="50" cy="50" r="10" fill="#a3e635" fill-opacity="0.2"/>
+            </svg>
+            <div class="container">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+        
+        <!-- Split View Logs Panel -->
+        <aside id="log-panel" class="log-panel">
+            <div class="log-header">
+                <h3 id="log-title">Service Logs</h3>
+                <button class="close-logs-btn" onclick="closeLogs()" title="Close Logs">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <pre id="log-content" class="log-content">Select a service to view its logs...</pre>
+        </aside>
+    </div>
+    
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+    
+    <script>
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${isError ? 'error' : ''} show`;
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
+        }
+
+        let currentLogService = null;
+        let logPollInterval = null;
+
+        function toggleLogs(serviceId, serviceName) {
+            const panel = document.getElementById('log-panel');
+            const title = document.getElementById('log-title');
+            
+            // If already open for same service, close it
+            if (panel.classList.contains('open') && currentLogService === serviceId) {
+                closeLogs();
+                return;
+            }
+
+            currentLogService = serviceId;
+            title.innerText = `${serviceName || serviceId} Logs`;
+            panel.classList.add('open');
+            document.getElementById('log-content').innerText = "Loading logs...";
+            
+            if (logPollInterval) clearInterval(logPollInterval);
+            fetchLogs();
+            logPollInterval = setInterval(fetchLogs, 2000);
+        }
+
+        async function fetchLogs() {
+            if (!currentLogService) return;
+            try {
+                const res = await fetch(`/api/logs/${currentLogService}`);
+                const data = await res.json();
+                const logContent = document.getElementById('log-content');
+                
+                // Only scroll if we were already near bottom (auto-scroll)
+                const isNearBottom = logContent.scrollHeight - logContent.clientHeight <= logContent.scrollTop + 50;
+                
+                logContent.innerHTML = data.logs ? parseANSI(data.logs) : "No logs available yet.";
+                
+                if (isNearBottom) {
+                    logContent.scrollTop = logContent.scrollHeight;
+                }
+            } catch (e) {
+                console.error("Log fetch error", e);
+            }
+        }
+
+        function closeLogs() {
+            document.getElementById('log-panel').classList.remove('open');
+            if (logPollInterval) clearInterval(logPollInterval);
+            currentLogService = null;
+        }
+
+        function parseANSI(str) {
+            let safeStr = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const colors = {
+                '30': 'black', '31': 'var(--danger)', '32': 'var(--success)', '33': '#eab308', 
+                '34': '#3b82f6', '35': '#d946ef', '36': 'var(--primary)', '37': 'white'
+            };
+            let open = false;
+            safeStr = safeStr.replace(/\x1b\[([0-9;]*)m/g, (match, p1) => {
+                let codes = p1 ? p1.split(';') : ['0'];
+                let colorCode = codes.find(c => colors[c]);
+                let res = open ? '</span>' : '';
+                if (p1 === '0' || !p1) { open = false; return res; }
+                if (colorCode) { open = true; return res + `<span style="color: ${colors[colorCode]}; font-weight: ${codes.includes('1') ? 'bold' : 'normal'}">`; }
+                return res; // just close and strip unknown codes
+            });
+            return open ? safeStr + '</span>' : safeStr;
+        }
+
+        const themes = ['default', 'nord', 'gruvbox', 'tokyo-night'];
+        let currentThemeIndex = 0;
+
+        function applyTheme(themeName) {
+            document.documentElement.setAttribute('data-theme', themeName);
+            localStorage.setItem('ui-theme', themeName);
+        }
+
+        function cycleTheme() {
+            currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+            applyTheme(themes[currentThemeIndex]);
+            showToast(`Theme changed to: ${themes[currentThemeIndex]}`);
+        }
+
+        // Initialize theme
+        const savedTheme = localStorage.getItem('ui-theme');
+        if (savedTheme) {
+            currentThemeIndex = themes.indexOf(savedTheme);
+            if (currentThemeIndex === -1) currentThemeIndex = 0;
+            applyTheme(themes[currentThemeIndex]);
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
