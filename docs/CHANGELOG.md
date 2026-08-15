@@ -2,6 +2,16 @@
 
 All notable changes to **Chaos AI Studio** will be documented here.
 
+## [2.0.0] — 2026-08-15
+
+### 🚀 Major Architectural Refactor
+- **Python Package Migration**: Extracted the massive 900+ line `app.py` into a highly modular Flask Blueprints package (`backend/`).
+- **New Entrypoint**: The studio is now launched via `run.py`.
+- **Dynamic VRAM Offloading**: Enforced `--fit on --fit-target 205` for `llama-server` instances, enabling 95% VRAM utilization on 4GB GPUs with intelligent system RAM offloading for the excess.
+- **Low VRAM Mode**: Defaulted ComfyUI and Wan2.2 to `--lowvram` to minimize background idle memory overhead.
+- **Process Manager Hooks**: Migrated service polling to `backend/process_manager.py` and implemented strict `atexit` signal handling to purge orphaned AI processes on exit.
+- **Root Directory Cleanup**: Migrated configuration files to `config/`, logs to `logs/`, and extensive documentation to `docs/`.
+
 ---
 
 ## [1.0.0] — 2026-08-15

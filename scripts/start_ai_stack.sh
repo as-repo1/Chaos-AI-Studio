@@ -52,8 +52,9 @@ exec "$LLAMA_BIN" \
     --port "$LLAMA_PORT" \
     --host "0.0.0.0" \
     -ngl "$NGL" \
+    --fit on \
+    --fit-target 205 \
     -c "$CTX_SIZE" \
     -t "$THREADS" \
     -mg "$VULKAN_DEVICE" \
-    -sm none \
-    --log-format text
+    -sm none

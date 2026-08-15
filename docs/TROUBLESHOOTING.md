@@ -18,12 +18,12 @@ Chaos AI Studio's `setup.sh` script applies a patch automatically, but if you co
 
 **Symptom:** Image generation fails halfway, or LLM output turns to gibberish / crashes the process.
 
-**Cause:** Your GPU ran out of VRAM. This usually happens if you try to run ComfyUI and Llama at the exact same time on a 4GB/8GB GPU.
+**Cause:** Your GPU ran out of VRAM. While V2.0 natively manages dynamic VRAM offloading (`--fit on --fit-target 205` for LLMs and `--lowvram` for ComfyUI), running too many models concurrently with high thread counts or extremely large context sizes can still push limits.
 
 **Fix:**
 - Stop all other active services via the Dashboard.
 - Open the settings for Llama and reduce the **Context Size**.
-- If running on integrated graphics or low-VRAM dedicated GPUs, make sure the other services are completely stopped (use the Force Stop button if necessary).
+- The Sentinel File system handles mutual exclusion between ComfyUI and Wan2.2, but if you're running on integrated graphics or low-VRAM dedicated GPUs, make sure the other services are completely stopped (use the Force Stop button if necessary).
 
 ## 3. Intel Arc VRAM Not Showing in Telemetry
 
@@ -34,7 +34,7 @@ Chaos AI Studio's `setup.sh` script applies a patch automatically, but if you co
 **Fix:**
 - Check which card is which: `ls /sys/class/drm/`
 - Ensure your Arch Linux kernel is up to date (`sudo pacman -Syu`).
-- You can manually edit `app.py` -> `get_gpu_memory()` to point to `card1` if your Arc GPU is not the primary device.
+- You can manually edit `backend/hardware.py` -> `get_gpu_memory()` to point to `card1` if your Arc GPU is not the primary device.
 
 ## 4. No Compute Backends Shown in Settings
 
@@ -58,5 +58,5 @@ Chaos AI Studio's `setup.sh` script applies a patch automatically, but if you co
 2. Start the server manually to see errors:
    ```bash
    source venv/bin/activate
-   python app.py
+   python3 run.py
    ```

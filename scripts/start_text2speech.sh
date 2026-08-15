@@ -5,7 +5,7 @@
 # ==============================================================================
 
 MODELS_DIR="$HOME/models/audio-models"
-MODEL_PATH="$MODELS_DIR/vibevoice-1.5b-q4_k_m.gguf"
+MODEL_PATH="${MODEL_PATH:-$MODELS_DIR/vibevoice-1.5b-q4_k_m.gguf}"
 
 if [ ! -f "$MODEL_PATH" ]; then
     echo -e "\033[1;31mError: VibeVoice model not found at '$MODEL_PATH'\033[0m"
@@ -31,6 +31,8 @@ VULKAN_DEVICE="${VULKAN_DEVICE:-0}"
     --port "$PORT" \
     --host "0.0.0.0" \
     -ngl "$NGL" \
+    --fit on \
+    --fit-target 205 \
     -c "$CTX_SIZE" \
     -mg "$VULKAN_DEVICE" \
     -sm none \

@@ -55,46 +55,6 @@
         <button class="btn primary" style="flex:1;" onclick="saveSettings()">Save</button>
     </div>
 </dialog>
-
-<dialog id="repo-details-modal" class="repo-modal" open>
-    <div class="repo-modal-header">
-        <h2>Edit repository details</h2>
-        <button class="repo-close-btn" type="button" aria-label="Close" onclick="document.getElementById('repo-details-modal').close(); this.closest('dialog').style.display='none';">×</button>
-    </div>
-
-    <div class="repo-form">
-        <div class="repo-field">
-            <label>Description</label>
-            <textarea class="repo-input repo-description" rows="1" aria-label="Description">Short description of this repository</textarea>
-            <div class="repo-remaining">350 characters remaining</div>
-        </div>
-
-        <div class="repo-field">
-            <label>Website</label>
-            <div class="repo-url-wrap">
-                <input class="repo-input" type="url" placeholder="Enter a valid URL" aria-label="Website">
-                <button class="repo-link-btn" type="button" aria-label="Open website">↗</button>
-            </div>
-        </div>
-
-        <div class="repo-field">
-            <label>Topics</label>
-            <div class="repo-input repo-topics-input">Add topics</div>
-        </div>
-
-        <div class="repo-field repo-homepage-field">
-            <label>Include in the home page</label>
-            <label class="checkbox-row"><input type="checkbox" checked> <span>Releases</span></label>
-            <label class="checkbox-row"><input type="checkbox"> <span>Deployments</span></label>
-            <label class="checkbox-row"><input type="checkbox" checked> <span>Packages</span></label>
-        </div>
-    </div>
-
-    <div class="repo-actions">
-        <button class="repo-action secondary" type="button">Cancel</button>
-        <button class="repo-action primary" type="button">Save changes</button>
-    </div>
-</dialog>
 {% endblock %}
 
 {% block scripts %}

@@ -19,10 +19,7 @@
   <img src="assets/settings.png" alt="Chaos AI Studio Settings" width="800">
 </p>
 
-[![Version](https://img.shields.io/badge/version-1.0.0-a3e635?style=flat-square)](CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-f97316?style=flat-square)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://python.org)
-[![GPU](https://img.shields.io/badge/GPU-Intel%20Arc%20%2F%20AMD%20%2F%20NVIDIA-88c0d0?style=flat-square)](https://github.com/ggerganov/llama.cpp)
+
 
 </div>
 
@@ -33,9 +30,10 @@
 - **Unified Dashboard** — Start, stop, and monitor all your AI services from one place
 - **Real-time Telemetry** — Live CPU, RAM, Swap, and GPU VRAM usage graphs
 - **Split-View Logs** — Coloured ANSI log panel slides in from the right per-service
-- **VRAM Guard** — Prevents OOM crashes by enforcing mutual exclusion between heavy services
+- **VRAM Guard & Dynamic CPU Offloading** — Prevents OOM crashes by dynamically reserving 5% of VRAM (leaving a 205MB margin) and perfectly balancing layer offloading between your GPU and CPU (`--fit on` and `--lowvram`).
 - **4 Themes** — Neon Dark · Nord · Gruvbox · Tokyo Night
 - **Model Hub** — Browse and one-click download models from Hugging Face
+- **Process Hygiene** — `atexit` hooks strictly manage and clean up all spawned `llama.cpp` and `ComfyUI` orphaned processes on shutdown.
 - **Force Stop** — SIGKILL button for services that refuse to shut down gracefully
 - **Fully Local** — No cloud, no telemetry, no internet required after setup
 
@@ -95,10 +93,21 @@ Open **http://localhost:5000** in your browser.
 
 ```
 Chaos-AI-Studio/
-├── app.py                  # Flask backend — service management, API
+├── run.py                  # Thin entry point to launch the server
+├── backend/                # Core python package (Flask + Logic)
+│   ├── __init__.py         # App factory & Blueprint registration
+│   ├── config.py           # Config loading/saving logic
+│   ├── hardware.py         # System telemetry & GPU/VRAM monitoring
+│   ├── models_manager.py   # Model discovery & HuggingFace catalogue
+│   ├── process_manager.py  # AI service start/stop, watchdog, atexit
+│   ├── routes_ui.py        # Flask Blueprint for HTML page rendering
+│   └── routes_api.py       # Flask Blueprint for REST API endpoints
 ├── setup.sh                # One-command installer
 ├── requirements.txt        # Python dependencies
-├── config.json             # Runtime settings (gitignored)
+├── config/
+│   └── config.json         # Runtime settings (gitignored)
+├── docs/                   # Additional documentation
+├── logs/                   # Log files
 ├── scripts/
 │   ├── start_ai_stack.sh   # Llama LLM server
 │   ├── start_comfyui.sh    # ComfyUI image generation
@@ -122,14 +131,14 @@ Settings are stored in `config.json` (auto-created on first run). You can also e
 {
     "llama": {
         "ctx_size": 4096,
-        "ngl": 99,
+        "ngl": "auto",
         "port": 8080,
         "threads": 4,
         "model": "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
     },
     "text2speach": {
         "ctx_size": 1024,
-        "ngl": 99,
+        "ngl": "auto",
         "port": 8090,
         "threads": 4,
         "model": "vibevoice-1.5b-q4_k_m.gguf"
@@ -140,6 +149,15 @@ Settings are stored in `config.json` (auto-created on first run). You can also e
     }
 }
 ```
+
+---
+
+## 🚀 Architectural Optimizations (VRAM)
+
+**Chaos AI Studio is engineered to run heavily demanding AI models on entry-level hardware (like the 4GB Intel Arc A370M) through strict memory partitioning:**
+- **Dynamic Llama.cpp Splitting:** `llama-server` is spawned using `--fit on --fit-target 205`. This enforces a strict 95% maximum VRAM fill rate, dynamically placing exactly the right number of layers onto your GPU while gracefully overflowing excess weight into System RAM without crashing. 
+- **PyTorch Low-VRAM Enforcement:** Image and Video generation processes (ComfyUI) are unconditionally bound to PyTorch's `--lowvram` flag. The massive diffusion models reside securely in CPU RAM and are pushed sequentially to the GPU tensor-by-tensor precisely at inference time.
+- **Strict Process Hygiene:** All backend bash scripts strictly adhere to PEP8 guidelines and clean up gracefully. `atexit` hooks guarantee that no orphaned AI processes are ever left lingering in the background consuming idle memory.
 
 ---
 
